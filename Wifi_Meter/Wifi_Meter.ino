@@ -1,20 +1,27 @@
 /*
- An example analogue meter using a ST7735 TFT LCD screen
-
- This example uses the hardware SPI only
- Needs Font 2 (also Font 4 if using large scale label)
-
- Updated by Bodmer for variable meter size
+This code is written by Devbrat Raghuvanshi.
+and uses the exaple and library given on git hub.
+https://github.com/Bodmer/TFT_eSPI
+https://github.com/LennartHennigs/Button2
 */
-
+ 
 // Define meter size
 #define M_SIZE 1
 
 #include <TFT_eSPI.h> // Hardware-specific library
 #include <SPI.h>
 #include "WiFi.h"
+#include "Button2.h";
 
-String SSID_NAME= "DEVIL";
+#define BUTTON_A_PIN  0
+#define BUTTON_B_PIN  35
+Button2 buttonA = Button2(BUTTON_A_PIN);
+Button2 buttonB = Button2(BUTTON_B_PIN);
+
+String SSID_NAME= "";
+int16_t SSID_Index= 0;
+int16_t SSID_Count= 0;
+int16_t Strenth = -100;
 
 TFT_eSPI tft = TFT_eSPI();       // Invoke custom library
 
@@ -28,40 +35,71 @@ uint32_t updateTime = 0;       // time for next update
 int old_analog =  -999; // Value last displayed
 
 void setup(void) {
-  Serial.begin(57600); // For debug
+  
+  Serial.begin(115200); // For debug
+  
+  buttonA.setClickHandler(click);
+  buttonB.setClickHandler(click);
+
+  
   tft.init();
   tft.setRotation(3);
   tft.fillScreen(TFT_BLACK);
-
+  
   analogMeter(); // Draw analogue meter
 
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
-  delay(100);
+  SSID_Count = WiFi.scanNetworks();
+
+  //fancy code for 10 sec delay  :P
+  int d = 0;
+  int value[6] = {0, 0, 0, 0, 0, 0};
+  SSID_NAME = "Scaning";
+  for(int t=0; t<=200;t++){
+      d += 4; if (d >= 360) d = 0;
+      value[0] = 50 + 50 * sin((d + 0) * 0.0174532925);
+      plotNeedle(value[0], 0); 
+      delay(50);
+    }
+
+  //delay(5000);
 }
 
 
 void loop() {
-
-  int16_t Strenth = -100;
-  int16_t n = WiFi.scanNetworks();
-      if (n == 0) {
-        SSID_NAME = "NA";
+  
+    buttonA.loop();
+    buttonB.loop();
+    
+   if (SSID_Count == 0) {
+         SSID_NAME = "No Network";
+         plotNeedle(0, 0);
     } else {
-        for (int i = 0; i < n; ++i) {
-          if (WiFi.SSID(i) == SSID_NAME){
-           for (int j = 0; j < 100; ++j) {
-               Strenth = WiFi.RSSI(i);
-                Strenth = map(Strenth,-100,0,0,100);
-                plotNeedle(Strenth, 0); 
-                delay(10);
-            }
-          }
-        }
+            SSID_NAME = ":"+ WiFi.SSID(SSID_Index);
+            SSID_NAME = (SSID_Index+1)+SSID_NAME;
+            Strenth = WiFi.RSSI(SSID_Index);
+            Strenth = map(Strenth,-100,0,0,100);
+            plotNeedle(Strenth, 0);
+            delay(50);
     }
-    delay(1000);
 }
 
+void click(Button2& btn) {
+  
+    if (btn == buttonA) {
+      if(SSID_Index > 0){
+        SSID_Index = SSID_Index -1;
+        }
+      Serial.print("A clicked SSID_Index:");Serial.println(SSID_Index);
+      
+    } else if (btn == buttonB) {
+      if(SSID_Index < SSID_Count-1){
+        SSID_Index = SSID_Index +1;
+        }
+      Serial.print("B clicked SSID_Index:");Serial.println(SSID_Index);
+    }
+}
 
 // #########################################################################
 //  Draw the analogue meter on the screen
@@ -155,9 +193,8 @@ void analogMeter()
   }
 
   tft.drawString("dBm", M_SIZE*(3 + 230 - 40), M_SIZE*(119 - 20), 2); // Units at bottom right
-  tft.drawCentreString(SSID_NAME, M_SIZE*120, M_SIZE*75, 4); // Comment out to avoid font 4
+  tft.drawCentreString("Scaning", M_SIZE*120, M_SIZE*75, 4); // Comment out to avoid font 4
   tft.drawRect(1, M_SIZE*3, M_SIZE*236, M_SIZE*126, TFT_BLACK); // Draw bezel line
-
   plotNeedle(0, 0); // Put meter needle at 0
 }
 
@@ -199,7 +236,8 @@ void plotNeedle(int value, byte ms_delay)
 
     // Re-plot text under needle
     tft.setTextColor(TFT_BLACK, TFT_WHITE);
-    tft.drawCentreString(SSID_NAME, M_SIZE*120, M_SIZE*75, 4); // // Comment out to avoid font 4
+    tft.drawCentreString("                            ", M_SIZE*120, M_SIZE*75, 4);
+    tft.drawCentreString(SSID_NAME.substring(0,8), M_SIZE*120, M_SIZE*75, 4); // // Comment out to avoid font 4
 
     // Store new needle end coords for next erase
     ltx = tx;
